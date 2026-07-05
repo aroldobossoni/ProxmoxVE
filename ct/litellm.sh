@@ -1,17 +1,21 @@
 #!/usr/bin/env bash
-source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
+export COMMUNITY_SCRIPTS_URL="${COMMUNITY_SCRIPTS_URL:-https://raw.githubusercontent.com/aroldobossoni/ProxmoxVE/main}"
+source <(curl -fsSL "https://raw.githubusercontent.com/community-scripts/ProxmoxVED/main/misc/build.func")
 # Copyright (c) 2021-2026 community-scripts ORG
 # Author: stout01
+# Co-Authors: MickLesk, tremor021 (prior pip/Prisma versions)
+# Refactor: Docker Compose official stack (community contribution preserved)
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/BerriAI/litellm
 
 APP="LiteLLM"
-var_tags="${var_tags:-ai;interface}"
+var_tags="${var_tags:-ai;proxy;llm}"
 var_cpu="${var_cpu:-2}"
-var_ram="${var_ram:-2048}"
-var_disk="${var_disk:-4}"
+var_ram="${var_ram:-4096}"
+var_disk="${var_disk:-20}"
 var_os="${var_os:-debian}"
 var_version="${var_version:-13}"
+var_nesting="${var_nesting:-1}"
 var_unprivileged="${var_unprivileged:-1}"
 
 header_info "$APP"
@@ -24,29 +28,17 @@ function update_script() {
   check_container_storage
   check_container_resources
 
-  if [[ ! -f /etc/systemd/system/litellm.service ]]; then
+  if [[ ! -f /opt/litellm/docker-compose.yml ]]; then
     msg_error "No ${APP} Installation Found!"
     exit
   fi
 
-  msg_info "Stopping Service"
-  systemctl stop litellm
-  msg_ok "Stopped Service"
+  msg_info "Updating LiteLLM (Docker Compose)"
+  cd /opt/litellm
+  $STD docker compose pull
+  $STD docker compose up -d
+  msg_ok "Updated LiteLLM containers"
 
-  VENV_PATH="/opt/litellm/.venv"
-  PYTHON_VERSION="3.13" USE_UVX="YES" setup_uv
-
-  msg_info "Updating LiteLLM"
-  $STD "$VENV_PATH/bin/python" -m pip install --upgrade litellm[proxy] prisma
-  msg_ok "LiteLLM updated"
-
-  msg_info "Updating DB Schema"
-  $STD uv --directory=/opt/litellm run litellm --config /opt/litellm/litellm.yaml --use_prisma_db_push --skip_server_startup
-  msg_ok "DB Schema Updated"
-
-  msg_info "Starting Service"
-  systemctl start litellm
-  msg_ok "Started Service"
   msg_ok "Updated successfully!"
   exit
 }
@@ -59,3 +51,4 @@ msg_ok "Completed successfully!\n"
 echo -e "${CREATING}${GN}${APP} setup has been successfully initialized!${CL}"
 echo -e "${INFO}${YW} Access it using the following URL:${CL}"
 echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:4000${CL}"
+echo -e "${INFO}${YW} Master key saved to:${CL} ${TAB}${BGN}~/litellm.creds${CL}"
